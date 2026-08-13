@@ -19,48 +19,120 @@ from email.mime.multipart import MIMEMultipart
 # ---------------------------------------------------------------------------
 
 COMPANIES = [
+    # FAANG / MAANG
     "Google",
     "Amazon",
-    "IBM",
-    "Microsoft",
     "Apple",
     "Meta",
+    "Netflix",
+    # Big Tech / enterprise software
+    "Microsoft",
+    "IBM",
     "Salesforce",
     "Oracle",
     "SAP",
     "Cisco",
+    "Adobe",
+    "Intel",
+    "Dell",
+    "HP",
+    # Big 4
     "Deloitte",
+    "PwC",
+    "EY",
+    "KPMG",
+    # Consulting / Global Finance
     "Accenture",
     "McKinsey",
     "JPMorgan",
     "Goldman Sachs",
+    "Morgan Stanley",
+    "Citigroup",
+    "Bank of America",
+    "American Express",
+    "Visa",
+    "Mastercard",
+    "PayPal",
+    # UK Banks / Insurance / Financial Services
+    "Barclays",
+    "Lloyds Banking Group",
+    "HSBC",
+    "Santander",
+    "Nationwide",
+    "Vitality",
+    "Aviva",
+    "Prudential",
+    "Legal & General",
+    # Consumer / Retail / Fortune 500
     "Procter & Gamble",
     "Unilever",
     "PepsiCo",
     "Coca-Cola",
     "Walmart",
+    "Costco",
+    "Target",
+    "Home Depot",
+    "Johnson & Johnson",
+    "Nike",
+    "Disney",
+    "Starbucks",
+    "McDonald's",
+    "Tesco",
+    "Sainsbury's",
+    "Bolt",
+    # Telecom / Auto / Energy / Industrial / Pharma
+    "AT&T",
+    "Verizon",
+    "Ford",
+    "General Motors",
+    "Boeing",
+    "ExxonMobil",
+    "Chevron",
+    "UnitedHealth Group",
+    "CVS Health",
+    "BP",
+    "Shell",
+    "Vodafone",
+    "BT Group",
+    "GSK",
+    "AstraZeneca",
+    "Rolls-Royce",
+    "BAE Systems",
+    "Diageo",
+    # Other big tech / travel
+    "Uber",
+    "Airbnb",
 ]
 
 KEYWORDS = [
-    "Graduate Account Manager",
-    "Account Manager Graduate Scheme",
-    "Graduate Scheme Account Management",
-    "Entry Level Account Manager",
-    "Account Manager New Graduate",
-    "Early Careers Account Manager"
     "Account Manager",
+    "Graduate Account Manager",
+    "Entry Level Account Manager",
     "Sales",
+    "Graduate Sales",
+    "Entry Level Sales",
     "Marketing",
+    "Graduate Marketing",
     "Strategy",
+    "Graduate Strategy",
     "Operations",
+    "Graduate Operations",
     "Product Manager",
+    "Associate Product Manager",
+]
+
+# Titles containing these words get filtered out even if they match a keyword/company
+EXCLUDE_TITLE_KEYWORDS = [
+    "engineer",
+    "engineering",
+    "developer",
+    "software development",
 ]
 
 # Adzuna country code — "gb" for UK, "us" for US, etc.
 COUNTRY = "gb"
 
-# How many days back to consider a job "new" (keep small so we don't re-alert
-# on old jobs the first time this runs)
+# How many days back to consider a job "new"
 MAX_DAYS_OLD = 3
 
 STATE_FILE = os.path.join(os.path.dirname(__file__), "..", "seen_jobs.json")
@@ -110,65 +182,3 @@ def search_adzuna(company, keyword):
 
 def company_matches(ad, company):
     name = (ad.get("company", {}) or {}).get("display_name", "") or ""
-    return company.lower() in name.lower()
-
-
-def format_email(new_ads):
-    body = MIMEMultipart("alternative")
-    body["Subject"] = f"🔔 {len(new_ads)} new job posting(s) matching your watch list"
-    body["From"] = GMAIL_ADDRESS
-    body["To"] = TO_EMAIL
-
-    lines = []
-    for ad in new_ads:
-        title = ad.get("title", "Unknown title")
-        company = (ad.get("company", {}) or {}).get("display_name", "Unknown company")
-        location = (ad.get("location", {}) or {}).get("display_name", "")
-        url = ad.get("redirect_url", "")
-        created = ad.get("created", "")
-        lines.append(
-            f"<p><b>{title}</b> — {company} ({location})<br>"
-            f"Posted: {created}<br>"
-            f"<a href='{url}'>{url}</a></p><hr>"
-        )
-    html = "<html><body>" + "".join(lines) + "</body></html>"
-    body.attach(MIMEText(html, "html"))
-    return body
-
-
-def send_email(new_ads):
-    msg = format_email(new_ads)
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
-        server.sendmail(GMAIL_ADDRESS, [TO_EMAIL], msg.as_string())
-
-
-def main():
-    seen = load_seen()
-    new_ads = []
-    new_ids = set()
-
-    for company in COMPANIES:
-        for keyword in KEYWORDS:
-            ads = search_adzuna(company, keyword)
-            for ad in ads:
-                if not company_matches(ad, company):
-                    continue
-                ad_id = str(ad.get("id"))
-                if ad_id in seen or ad_id in new_ids:
-                    continue
-                new_ids.add(ad_id)
-                new_ads.append(ad)
-            time.sleep(0.3)  # be polite to the API
-
-    if new_ads:
-        print(f"Found {len(new_ads)} new job(s). Sending email...")
-        send_email(new_ads)
-    else:
-        print("No new jobs found this run.")
-
-    save_seen(seen | new_ids)
-
-
-if __name__ == "__main__":
-    main()
