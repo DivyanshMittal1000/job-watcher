@@ -42,6 +42,12 @@ COMPANIES = [
 ]
 
 KEYWORDS = [
+    "Graduate Account Manager",
+    "Account Manager Graduate Scheme",
+    "Graduate Scheme Account Management",
+    "Entry Level Account Manager",
+    "Account Manager New Graduate",
+    "Early Careers Account Manager"
     "Account Manager",
     "Sales",
     "Marketing",
