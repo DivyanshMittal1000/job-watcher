@@ -15,131 +15,41 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ---------------------------------------------------------------------------
-# CONFIG — edit these lists to change what you're watching for
+# CONFIG
 # ---------------------------------------------------------------------------
 
 COMPANIES = [
-    # FAANG / MAANG
-    "Google",
-    "Amazon",
-    "Apple",
-    "Meta",
-    "Netflix",
-    # Big Tech / enterprise software
-    "Microsoft",
-    "IBM",
-    "Salesforce",
-    "Oracle",
-    "SAP",
-    "Cisco",
-    "Adobe",
-    "Intel",
-    "Dell",
-    "HP",
-    # Big 4
-    "Deloitte",
-    "PwC",
-    "EY",
-    "KPMG",
-    # Consulting / Global Finance
-    "Accenture",
-    "McKinsey",
-    "JPMorgan",
-    "Goldman Sachs",
-    "Morgan Stanley",
-    "Citigroup",
-    "Bank of America",
-    "American Express",
-    "Visa",
-    "Mastercard",
-    "PayPal",
-    # UK Banks / Insurance / Financial Services
-    "Barclays",
-    "Lloyds Banking Group",
-    "HSBC",
-    "Santander",
-    "Nationwide",
-    "Vitality",
-    "Aviva",
-    "Prudential",
-    "Legal & General",
-    # Consumer / Retail / Fortune 500
-    "Procter & Gamble",
-    "Unilever",
-    "PepsiCo",
-    "Coca-Cola",
-    "Walmart",
-    "Costco",
-    "Target",
-    "Home Depot",
-    "Johnson & Johnson",
-    "Nike",
-    "Disney",
-    "Starbucks",
-    "McDonald's",
-    "Tesco",
-    "Sainsbury's",
-    "Bolt",
-    # Telecom / Auto / Energy / Industrial / Pharma
-    "AT&T",
-    "Verizon",
-    "Ford",
-    "General Motors",
-    "Boeing",
-    "ExxonMobil",
-    "Chevron",
-    "UnitedHealth Group",
-    "CVS Health",
-    "BP",
-    "Shell",
-    "Vodafone",
-    "BT Group",
-    "GSK",
-    "AstraZeneca",
-    "Rolls-Royce",
-    "BAE Systems",
-    "Diageo",
-    # Other big tech / travel
-    "Uber",
-    "Airbnb",
+    "Google", "Amazon", "Apple", "Meta", "Netflix",
+    "Microsoft", "IBM", "Salesforce", "Oracle", "SAP", "Cisco",
+    "Adobe", "Intel", "Dell", "HP",
+    "Deloitte", "PwC", "EY", "KPMG",
+    "Accenture", "McKinsey", "JPMorgan", "Goldman Sachs", "Morgan Stanley",
+    "Citigroup", "Bank of America", "American Express", "Visa", "Mastercard", "PayPal",
+    "Barclays", "Lloyds Banking Group", "HSBC", "Santander", "Nationwide",
+    "Vitality", "Aviva", "Prudential", "Legal & General",
+    "Procter & Gamble", "Unilever", "PepsiCo", "Coca-Cola", "Walmart",
+    "Costco", "Target", "Home Depot", "Johnson & Johnson", "Nike", "Disney",
+    "Starbucks", "McDonald's", "Tesco", "Sainsbury's", "Bolt",
+    "AT&T", "Verizon", "Ford", "General Motors", "Boeing",
+    "ExxonMobil", "Chevron", "UnitedHealth Group", "CVS Health",
+    "BP", "Shell", "Vodafone", "BT Group", "GSK", "AstraZeneca",
+    "Rolls-Royce", "BAE Systems", "Diageo", "Uber", "Airbnb",
 ]
 
 KEYWORDS = [
-    "Account Manager",
-    "Graduate Account Manager",
-    "Entry Level Account Manager",
-    "Sales",
-    "Graduate Sales",
-    "Entry Level Sales",
-    "Marketing",
-    "Graduate Marketing",
-    "Strategy",
-    "Graduate Strategy",
-    "Operations",
-    "Graduate Operations",
-    "Product Manager",
-    "Associate Product Manager",
+    "Account Manager", "Graduate Account Manager", "Entry Level Account Manager",
+    "Sales", "Graduate Sales", "Entry Level Sales",
+    "Marketing", "Graduate Marketing",
+    "Strategy", "Graduate Strategy",
+    "Operations", "Graduate Operations",
+    "Product Manager", "Associate Product Manager",
 ]
 
-# Titles containing these words get filtered out even if they match a keyword/company
-EXCLUDE_TITLE_KEYWORDS = [
-    "engineer",
-    "engineering",
-    "developer",
-    "software development",
-]
+EXCLUDE_TITLE_KEYWORDS = ["engineer", "engineering", "developer", "software development"]
 
-# Adzuna country code — "gb" for UK, "us" for US, etc.
 COUNTRY = "gb"
-
-# How many days back to consider a job "new"
-MAX_DAYS_OLD = 3
-
+MAX_DAYS_OLD = 7
 STATE_FILE = os.path.join(os.path.dirname(__file__), "..", "seen_jobs.json")
-
-# ---------------------------------------------------------------------------
-# Credentials — pulled from environment variables (set as GitHub secrets)
-# ---------------------------------------------------------------------------
 
 ADZUNA_APP_ID = os.environ["ADZUNA_APP_ID"]
 ADZUNA_APP_KEY = os.environ["ADZUNA_APP_KEY"]
@@ -161,7 +71,6 @@ def save_seen(seen_ids):
 
 
 def search_adzuna(company, keyword):
-    """Query Adzuna for jobs matching `company keyword`, return list of ads."""
     url = f"https://api.adzuna.com/v1/api/jobs/{COUNTRY}/search/1"
     params = {
         "app_id": ADZUNA_APP_ID,
@@ -176,9 +85,53 @@ def search_adzuna(company, keyword):
         resp.raise_for_status()
         return resp.json().get("results", [])
     except requests.RequestException as e:
-        print(f"  [warn] Adzuna request failed for {company}/{keyword}: {e}")
+        print(f"  [warn] Adzuna request failed for {company}/{keyword}: {e}", flush=True)
         return []
 
 
 def company_matches(ad, company):
     name = (ad.get("company", {}) or {}).get("display_name", "") or ""
+    return company.lower() in name.lower()
+
+
+def format_email(new_ads):
+    body = MIMEMultipart("alternative")
+    body["Subject"] = f"🔔 {len(new_ads)} new job posting(s) matching your watch list"
+    body["From"] = GMAIL_ADDRESS
+    body["To"] = TO_EMAIL
+    lines = []
+    for ad in new_ads:
+        title = ad.get("title", "Unknown title")
+        company = (ad.get("company", {}) or {}).get("display_name", "Unknown company")
+        location = (ad.get("location", {}) or {}).get("display_name", "")
+        url = ad.get("redirect_url", "")
+        created = ad.get("created", "")
+        lines.append(
+            f"<p><b>{title}</b> — {company} ({location})<br>"
+            f"Posted: {created}<br>"
+            f"<a href='{url}'>{url}</a></p><hr>"
+        )
+    html = "<html><body>" + "".join(lines) + "</body></html>"
+    body.attach(MIMEText(html, "html"))
+    return body
+
+
+def send_email(new_ads):
+    msg = format_email(new_ads)
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
+        server.sendmail(GMAIL_ADDRESS, [TO_EMAIL], msg.as_string())
+
+
+def main():
+    total_combos = len(COMPANIES) * len(KEYWORDS)
+    print(f"Starting run: {len(COMPANIES)} companies x {len(KEYWORDS)} keywords = {total_combos} combinations", flush=True)
+
+    seen = load_seen()
+    print(f"Loaded {len(seen)} previously-seen job IDs", flush=True)
+
+    new_ads = []
+    new_ids = set()
+
+    for i, company in enumerate(COMPANIES, 1):
+        print(f"
